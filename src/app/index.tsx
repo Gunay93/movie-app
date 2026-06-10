@@ -1,98 +1,258 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import MovieCard from "@/components/movie-card";
+import SearchInput from "@/components/search-input";
+import { getPopularMovies } from "@/services/movie-service";
+import { getFavoriteIds, saveFavoriteIds } from "@/storage/favorite-storage";
+import { Movie } from "@/types/movie";
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { router } from "expo-router";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+export default function HomeScreen() {
+  const [search, setSearch] = useState("");
+  const [showFavorites, setShowFavorites] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
+  const [movies, setMovies] = useState<Movie[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+  const loadMovies = async (pageNumber = 1) => {
+    try {
+      const data = await getPopularMovies(pageNumber);
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
+      if (pageNumber === 1) {
+        setMovies(data);
+      } else {
+        setMovies((prev) => [...prev, ...data]);
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  };
+  const loadMoreMovies = async () => {
+    if (isLoadingMore || showFavorites || search.trim()) return;
+
+    setIsLoadingMore(true);
+
+    const nextPage = page + 1;
+
+    try {
+      await loadMovies(nextPage);
+      setPage(nextPage);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+  useEffect(() => {
+    const init = async () => {
+      await loadMovies();
+      await loadFavorites();
+      setLoading(false);
+    };
+
+    init();
+  }, []);
+  const filteredMovies = movies.filter((movie) => {
+    const matchesSearch = movie.title
+      .toLowerCase()
+      .includes(search.toLowerCase());
+
+    const matchesFavorite =
+      !showFavorites || favoriteIds?.includes(movie.id);
+
+    return matchesSearch && matchesFavorite;
+  });
+
+  const loadFavorites = async () => {
+    const ids = await getFavoriteIds();
+    setFavoriteIds(ids);
+  };
+
+  useEffect(() => {
+    saveFavoriteIds(favoriteIds);
+  }, [favoriteIds]);
+
+  const toggleFavorite = (id: number) => {
+    setFavoriteIds((prev) =>
+      prev.includes(id)
+        ? prev.filter((item) => item !== id)
+        : [...prev, id]
+    );
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+  
+    try {
+      setPage(1);
+      await loadMovies(1);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+  if (loading) {
     return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
+      <View style={styles.center}>
+        <ActivityIndicator size="large" />
+        <Text style={{ marginTop: 10 }}>Filmlər yüklənir...</Text>
+      </View>
     );
   }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+    <View style={styles.container}>
+      <Text style={styles.header}>Filmlər <MaterialCommunityIcons name="movie-open-outline" size={24} color="black" /></Text>
+      <Text style={styles.subtitle}>Məhşur filmlər</Text>
+      <SearchInput
+        value={search}
+        onChangeText={setSearch}
+      />
+      <View style={styles.filters}>
+        <Pressable
+          onPress={() => setShowFavorites(false)}
+          style={[
+            styles.filterButton,
+            !showFavorites && styles.activeFilter,
+          ]}
+        >
+          <Text style={
+            !showFavorites
+              ? styles.activeFilterText
+              : styles.filterText
+          }>All Movies</Text>
+        </Pressable>
 
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+        <Pressable
+          onPress={() => setShowFavorites(true)}
+          style={[
+            styles.filterButton,
+            showFavorites && styles.activeFilter,
+          ]}
+        >
+          <Text style={
+            showFavorites
+              ? styles.activeFilterText
+              : styles.filterText
+          }>Favorites</Text>
+        </Pressable>
+      </View>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
+      <FlatList
+        data={filteredMovies}
+        onEndReached={loadMoreMovies}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          isLoadingMore ? (
+            <ActivityIndicator style={{ marginVertical: 20 }} />
+          ) : null
+        }
+        alwaysBounceVertical
+        contentContainerStyle={[
+          styles.listContent,
+          filteredMovies.length === 0 && styles.emptyListContent,
+        ]}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        keyExtractor={(item) => item.id.toString()}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <MaterialCommunityIcons
+              name="movie-search-outline"
+              size={70}
+              color="#999"
+            />
+            <Text style={styles.emptyTitle}>Film tapılmadı</Text>
+            <Text style={styles.emptySubtitle}>Başqa axtarış cəhd edin</Text>
+          </View>
+        }
+        renderItem={({ item }) => (
+          <MovieCard
+            isFavorite={favoriteIds.includes(item.id)}
+            onToggleFavorite={() => toggleFavorite(item.id)}
+            movie={item}
+            onPress={() => router.push({
+              pathname: "/movie/[id]",
+              params: {
+                id: item.id,
+              },
+            })}
           />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+        )}
+        showsVerticalScrollIndicator={false}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
+    padding: 18,
+    paddingTop: 20,
+    backgroundColor: "#fff",
   },
-  safeArea: {
+  filters: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 20,
+  },
+
+  filterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "#eee",
+  },
+  filterText: {
+    color: "#111",
+    fontWeight: "500",
+  },
+
+  activeFilterText: {
+    color: "#fff",
+    fontWeight: "600",
+  },
+  activeFilter: {
+    backgroundColor: "#111",
+    color: '#fff'
+  },
+  header: {
+    fontSize: 32,
+    fontWeight: "800",
+    marginBottom: 6,
+  },
+
+  subtitle: {
+    fontSize: 16,
+    color: "#777",
+    marginBottom: 22,
+  },
+  center: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 80,
   },
-  title: {
-    textAlign: 'center',
+
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#111",
   },
-  code: {
-    textTransform: 'uppercase',
+  listContent: {
+    paddingBottom: 50,
+    flexGrow: 1,
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  emptyListContent: {
+    justifyContent: "center",
+  },
+  emptySubtitle: {
+    fontSize: 15,
+    color: "#777",
+    marginTop: 6,
   },
 });
