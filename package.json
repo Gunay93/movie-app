@@ -1,7 +1,7 @@
 {
   "name": "movieapp",
   "main": "expo-router/entry",
-  "homepage": "https://Gunay93.github.io/movie_app",
+  "homepage": "https://Gunay93.github.io/movie_app/",
   "version": "1.0.0",
   "dependencies": {
     "@expo/ui": "~56.0.15",
