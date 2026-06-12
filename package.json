@@ -1,7 +1,7 @@
 {
   "name": "movieapp",
   "main": "expo-router/entry",
-  "homepage": "https://Gunay93.github.io/movie_app/",
+  "homepage": "https://Gunay93.github.io/movie-app/",
   "version": "1.0.0",
   "dependencies": {
     "@expo/ui": "~56.0.15",
@@ -43,7 +43,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "predeploy": "expo export --platform web",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist --dotfiles --no-history"
   },
   "private": true
 }

@@ -10,7 +10,6 @@ React Native movie application built with Expo.
 - AsyncStorage
 - TMDB API integration
 - Pull to refresh
-- Dark mode support
 
 ## Tech Stack
 
