@@ -42,8 +42,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "predeploy": "expo export --platform web",
-    "deploy": "gh-pages -d dist --dotfiles --no-history"
+    "export:web": "expo export --platform web"
   },
   "private": true
 }
