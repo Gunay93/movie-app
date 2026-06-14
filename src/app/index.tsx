@@ -1,6 +1,6 @@
 import MovieCard from "@/components/movie-card";
 import SearchInput from "@/components/search-input";
-import { getPopularMovies } from "@/services/movie-service";
+import { getPopularMovies, searchMovies } from "@/services/movie-service";
 import { getFavoriteIds, saveFavoriteIds } from "@/storage/favorite-storage";
 import { Movie } from "@/types/movie";
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -15,23 +15,40 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const loadMovies = async (pageNumber = 1) => {
+  const loadMovies = async (pageNumber = 1, query = search) => {
     try {
-      const data = await getPopularMovies(pageNumber);
-
+      const data = query.trim()
+        ? await searchMovies(query, pageNumber)
+        : await getPopularMovies(pageNumber);
+      setTotalPages(data.totalPages);
       if (pageNumber === 1) {
-        setMovies(data);
+        setMovies(data.movies);
       } else {
-        setMovies((prev) => [...prev, ...data]);
+        setMovies((prev) => [...prev, ...data.movies]);
       }
     } catch (error) {
       console.log(error);
     }
   };
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(1);
+      loadMovies(1, search);
+    }, 500);
+  
+    return () => clearTimeout(timer);
+  }, [search]);
   const loadMoreMovies = async () => {
-    if (isLoadingMore || showFavorites || search.trim()) return;
+    if (loading ||
+      refreshing ||
+      isLoadingMore ||
+      showFavorites ||
+      movies.length === 0 ||
+      // search.trim().length > 0 ||
+      page >= totalPages) return;
 
     setIsLoadingMore(true);
 
@@ -53,15 +70,11 @@ export default function HomeScreen() {
 
     init();
   }, []);
-  const filteredMovies = movies.filter((movie) => {
-    const matchesSearch = movie.title
-      .toLowerCase()
-      .includes(search.toLowerCase());
 
+  const filteredMovies = movies.filter((movie) => {
     const matchesFavorite =
       !showFavorites || favoriteIds?.includes(movie.id);
-
-    return matchesSearch && matchesFavorite;
+    return matchesFavorite;
   });
 
   const loadFavorites = async () => {
@@ -83,7 +96,7 @@ export default function HomeScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-  
+
     try {
       setPage(1);
       await loadMovies(1);
@@ -139,7 +152,7 @@ export default function HomeScreen() {
 
       <FlatList
         data={filteredMovies}
-        onEndReached={loadMoreMovies}
+        onEndReached={filteredMovies.length > 0 ? loadMoreMovies : undefined}
         onEndReachedThreshold={0.5}
         ListFooterComponent={
           isLoadingMore ? (
